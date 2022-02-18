@@ -15,6 +15,7 @@
 
 require_once 'resourceevent.civix.php';
 // phpcs:disable
+use Civi\Api4;
 use CRM_Resourceevent_ExtensionUtil as E;
 // phpcs:enable
 
@@ -43,6 +44,60 @@ function resourceevent_civicrm_xmlMenu(&$files) {
  */
 function resourceevent_civicrm_install() {
   _resourceevent_civix_civicrm_install();
+
+  // Synchronise participant role.
+  $customData = new CRM_Resourceevent_CustomData(E::LONG_NAME);
+  $customData->syncOptionGroup(E::path('resources/option_group_participant_role.json'));
+
+  // Synchronise custom field for storing resource demand on participants.
+  // Note: This can't be done with CRM_Resourceevent_CustomData because we don't
+  // know the "role ID", which is the OptionValue's value.
+  Api4\CustomGroup::create()
+    ->setValues([
+      'name' => 'resource_information',
+      'title' => 'Resource Information',
+      'extends' => 'Participant',
+      'extends_entity_column_id' => CRM_Core_OptionGroup::values(
+        'custom_data_type',
+        TRUE,
+        FALSE,
+        FALSE,
+        NULL,
+        'name'
+      )['ParticipantRole'],
+      'extends_entity_column_value' => Api4\OptionValue::get()
+        ->addSelect('value')
+        ->addWhere('option_group_id:name', '=', 'participant_role')
+        ->addWhere('name', '=', 'human_resource')
+        ->execute()
+        ->column('value'),
+      // Note: "is_reserved" hides the custom field group in the UI.
+      'is_reserved' => 1,
+      'table_name' => 'civicrm_value_resource_information',
+    ])
+    ->addChain('resource_demand', Api4\CustomField::create()->setValues([
+      'name' => 'resource_demand',
+      'label' => 'Resource Demand',
+      'custom_group_id' => '$id',
+      'html_type' => 'Text',
+      'data_type' => 'Int',
+      'is_required' => 1,
+      'is_searchable' => 0,
+      'is_search_range' => 0,
+      'is_view' => 1,
+      'in_selector' => 0,
+      'column_name' => 'resource_demand'
+    ]))
+    ->execute();
+
+  // TODO: Add a foreign key constraint to the custom field, allowing only
+  //       resource demand IDs as values. This currently fails due to
+  //       incompatible database fields (int vs. unsigned int).
+//  CRM_Core_DAO::singleValueQuery("
+//ALTER TABLE civicrm_value_resource_information
+//    ADD CONSTRAINT FK_civicrm_value_resource_information_resource_demand FOREIGN KEY (resource_demand)
+//        REFERENCES civicrm_resource_demand(id);
+//");
 }
 
 /**
