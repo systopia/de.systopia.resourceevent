@@ -44,60 +44,6 @@ function resourceevent_civicrm_xmlMenu(&$files) {
  */
 function resourceevent_civicrm_install() {
   _resourceevent_civix_civicrm_install();
-
-  // Synchronise participant role.
-  $customData = new CRM_Resourceevent_CustomData(E::LONG_NAME);
-  $customData->syncOptionGroup(E::path('resources/option_group_participant_role.json'));
-
-  // Synchronise custom field for storing resource demand on participants.
-  // Note: This can't be done with CRM_Resourceevent_CustomData because we don't
-  // know the "role ID", which is the OptionValue's value.
-  Api4\CustomGroup::create()
-    ->setValues([
-      'name' => 'resource_information',
-      'title' => 'Resource Information',
-      'extends' => 'Participant',
-      'extends_entity_column_id' => CRM_Core_OptionGroup::values(
-        'custom_data_type',
-        TRUE,
-        FALSE,
-        FALSE,
-        NULL,
-        'name'
-      )['ParticipantRole'],
-      'extends_entity_column_value' => Api4\OptionValue::get()
-        ->addSelect('value')
-        ->addWhere('option_group_id:name', '=', 'participant_role')
-        ->addWhere('name', '=', 'human_resource')
-        ->execute()
-        ->column('value'),
-      // Note: "is_reserved" hides the custom field group in the UI.
-      'is_reserved' => 1,
-      'table_name' => 'civicrm_value_resource_information',
-    ])
-    ->addChain('resource_demand', Api4\CustomField::create()->setValues([
-      'name' => 'resource_demand',
-      'label' => 'Resource Demand',
-      'custom_group_id' => '$id',
-      'html_type' => 'Text',
-      'data_type' => 'Int',
-      'is_required' => 1,
-      'is_searchable' => 0,
-      'is_search_range' => 0,
-      'is_view' => 1,
-      'in_selector' => 0,
-      'column_name' => 'resource_demand'
-    ]))
-    ->execute();
-
-  // TODO: Add a foreign key constraint to the custom field, allowing only
-  //       resource demand IDs as values. This currently fails due to
-  //       incompatible database fields (int vs. unsigned int).
-//  CRM_Core_DAO::singleValueQuery("
-//ALTER TABLE civicrm_value_resource_information
-//    ADD CONSTRAINT FK_civicrm_value_resource_information_resource_demand FOREIGN KEY (resource_demand)
-//        REFERENCES civicrm_resource_demand(id);
-//");
 }
 
 /**
@@ -107,6 +53,28 @@ function resourceevent_civicrm_install() {
  */
 function resourceevent_civicrm_postInstall() {
   _resourceevent_civix_civicrm_postInstall();
+
+  // Reconcile managed entities again for our custom group to pick up the
+  // correct participant role to be attached to. Unfortunately, we can't limit
+  // this to this extension's managed entities only as
+  // \CRM_Core_ManagedEntities::reconcileEnabledModule() has protected
+  // visibility.
+  CRM_Core_ManagedEntities::singleton(TRUE)->reconcile();
+
+  // Add a foreign key constraint to the custom field, allowing only resource
+  // demand IDs as values.
+  CRM_Core_DAO::singleValueQuery("
+  ALTER TABLE civicrm_value_resource_information
+      MODIFY resource_demand INT UNSIGNED DEFAULT NULL,
+      ADD CONSTRAINT FK_civicrm_value_resource_information_resource_demand FOREIGN KEY (resource_demand)
+          REFERENCES civicrm_resource_demand(id);
+  ");
+  // Mark the managed entity as modified to prevent it from being reset.
+  Api4\Managed::update(FALSE)
+    ->addWhere('module', '=', E::LONG_NAME)
+    ->addWhere('name', '=', 'CustomField__resource_information__resource_demand')
+    ->addValue('entity_modified_date', date('Y-m-d H:i:s'))
+    ->execute();
 }
 
 /**
@@ -155,6 +123,83 @@ function resourceevent_civicrm_upgrade($op, CRM_Queue_Queue $queue = NULL) {
  */
 function resourceevent_civicrm_managed(&$entities) {
   _resourceevent_civix_civicrm_managed($entities);
+
+  // Synchronise option value for participant role "Human Resource".
+  $entities[] = [
+    'module' => E::LONG_NAME,
+    'name' => 'OptionValue__participant_role__human_resource',
+    'entity' => 'OptionValue',
+    'cleanup' => 'always',
+    'update' => 'unmodified',
+    'params' => [
+      'version' => 4,
+      'values' => [
+        'option_group_id.name' => 'participant_role',
+        'name' => 'human_resource',
+        'label' => 'Human Resource',
+        'description' => 'Contacts participating as human resources, managed by CiviResource.',
+        'is_reserved' => TRUE,
+        'is_active' => TRUE,
+        'filter' => 0,
+      ],
+    ],
+  ];
+
+  // Synchronise custom group on participant objects with participant role
+  // "human_resource".
+  // Note: This requires the participant role "human_resource" to exist.
+  // Therefore, we need to reconcile managed entities twice when installing.
+  $entities[] = [
+    'module' => E::LONG_NAME,
+    'name' => 'CustomGroup__resource_information',
+    'entity' => 'CustomGroup',
+    'cleanup' => 'always',
+    'update' => 'unmodified',
+    'params' => [
+      'version' => 4,
+      'values' => [
+        'name' => 'resource_information',
+        'title' => 'Resource Information',
+        'extends' => 'Participant',
+        'extends_entity_column_id:name' => 'ParticipantRole',
+        'extends_entity_column_value' => Api4\OptionValue::get()
+          ->addSelect('value')
+          ->addWhere('option_group_id:name', '=', 'participant_role')
+          ->addWhere('name', '=', 'human_resource')
+          ->execute()
+          ->column('value'),
+        // Note: "is_reserved" hides the custom field group in the UI.
+        'is_reserved' => 1,
+        'table_name' => 'civicrm_value_resource_information',
+      ],
+    ],
+  ];
+
+  // Synchronise custom field for storing resource demand on participant
+  // objects.
+  $entities[] = [
+    'module' => E::LONG_NAME,
+    'name' => 'CustomField__resource_information__resource_demand',
+    'entity' => 'CustomField',
+    'cleanup' => 'always',
+    'update' => 'unmodified',
+    'params' => [
+      'version' => 4,
+      'values' => [
+        'name' => 'resource_demand',
+        'label' => 'Resource Demand',
+        'custom_group_id.name' => 'resource_information',
+        'html_type' => 'Text',
+        'data_type' => 'Int',
+        'is_required' => 1,
+        'is_searchable' => 0,
+        'is_search_range' => 0,
+        'is_view' => 1,
+        'in_selector' => 0,
+        'column_name' => 'resource_demand'
+      ],
+    ],
+  ];
 }
 
 /**
