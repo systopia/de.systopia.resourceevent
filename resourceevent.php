@@ -16,6 +16,8 @@
 require_once 'resourceevent.civix.php';
 // phpcs:disable
 use Civi\Api4;
+use Civi\Resourceevent\ParticipantSubscriber;
+use Civi\Resourceevent\ResourceAssignmentSubscriber;
 use CRM_Resourceevent_ExtensionUtil as E;
 // phpcs:enable
 
@@ -26,6 +28,9 @@ use CRM_Resourceevent_ExtensionUtil as E;
  */
 function resourceevent_civicrm_config(&$config) {
   _resourceevent_civix_civicrm_config($config);
+
+  \Civi::dispatcher()->addSubscriber(new ParticipantSubscriber());
+  \Civi::dispatcher()->addSubscriber(new ResourceAssignmentSubscriber());
 }
 
 /**
