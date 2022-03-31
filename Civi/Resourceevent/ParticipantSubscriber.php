@@ -36,7 +36,9 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
   public function insertUpdateParticipant(PostUpdate $event) {
     if ($event->object instanceof CRM_Event_BAO_Participant) {
       $participant = $event->object;
-      if (in_array(Utils::getResourceRole(), \CRM_Utils_Array::explodePadded($participant->role_id))) {
+      if (in_array(Utils::getResourceRole(), explode(\CRM_Core_DAO::VALUE_SEPARATOR, $participant->role_id))) {
+        // TODO: Avoid infinite loops between post hooks for ResourceAssignment
+        //       and Participant entities.
         // TODO: Depending on participant status:
         //       - positive: create/update ResourceAssignment
         //       - negative: delete ResourceAssignment
@@ -47,7 +49,9 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
   public function deleteParticipant(PostDelete $event) {
     if ($event->object instanceof CRM_Event_BAO_Participant) {
       $participant = $event->object;
-      if (in_array(Utils::getResourceRole(), \CRM_Utils_Array::explodePadded($participant->role_id))) {
+      if (in_array(Utils::getResourceRole(), explode(\CRM_Core_DAO::VALUE_SEPARATOR, $participant->role_id))) {
+        // TODO: Avoid infinite loops between post hooks for ResourceAssignment
+        //       and Participant entities.
         // TODO: Delete ResourceAssignment
       }
     }
