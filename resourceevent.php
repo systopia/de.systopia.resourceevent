@@ -167,7 +167,7 @@ function resourceevent_civicrm_managed(&$entities) {
         'title' => 'Resource Information',
         'extends' => 'Participant',
         'extends_entity_column_id:name' => 'ParticipantRole',
-        'extends_entity_column_value' => Api4\OptionValue::get()
+        'extends_entity_column_value' => Api4\OptionValue::get(FALSE)
           ->addSelect('value')
           ->addWhere('option_group_id:name', '=', 'participant_role')
           ->addWhere('name', '=', 'human_resource')
