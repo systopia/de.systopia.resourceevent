@@ -44,6 +44,11 @@ function resourceevent_civicrm_xmlMenu(&$files) {
  */
 function resourceevent_civicrm_install() {
   _resourceevent_civix_civicrm_install();
+
+  // Check for the CiviEvent component being enabled.
+  if (!\CRM_Core_BAO_ConfigSetting::enableComponent('CiviEvent')) {
+    throw new Exception(E::ts('CiviEvent component is not available. Can not install extension.'));
+  }
 }
 
 /**
