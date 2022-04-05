@@ -68,8 +68,9 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
           'contact_id' => $resource['entity_id'],
           'event_id' => $resource_demand['entity_id'],
           'role_id' => [$resource_role],
-          'custom_' . Utils::getDemandCustomFieldId() => $resource_demand['id'],
+          'resource_information.resource_demand' => $resource_demand['id'],
           'status_id' => Utils::getDefaultParticipantStatus('positive'),
+          'register_date' => date('Y-m-d H:i:s'),
         ];
         switch ($participants->count()) {
           case 0:

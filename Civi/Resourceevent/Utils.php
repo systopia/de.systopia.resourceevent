@@ -17,6 +17,9 @@ namespace Civi\Resourceevent;
 
 use Civi\Api4\CustomField;
 use Civi\Api4\OptionValue;
+use Civi\Api4\Participant;
+use Civi\Api4\Resource;
+use Civi\Api4\ResourceAssignment;
 use CRM_Resourceevent_ExtensionUtil as E;
 
 class Utils {
@@ -28,15 +31,6 @@ class Utils {
       ->addWhere('name', '=', 'human_resource')
       ->execute()
       ->single()['value'];
-  }
-
-  public static function getDemandCustomFieldId() {
-    return CustomField::get(FALSE)
-      ->addWhere('custom_group_id.name', '=', 'resource_information')
-      ->addWhere('name', '=', 'resource_demand')
-      ->addSelect('id')
-      ->execute()
-      ->single()['id'];
   }
 
   public static function getDefaultParticipantStatus($class) {
@@ -63,6 +57,53 @@ class Utils {
       $status_id = reset($result['values'])['id'];
     }
     return $status_id;
+  }
+
+  public static function getResourceForParticipant($participant_id) {
+    $participant = Participant::get(FALSE)
+      ->addSelect('contact_id', 'resource_information.resource_demand')
+      ->addWhere('id', '=', $participant_id)
+      ->execute()
+      ->single();
+    try {
+      $resource = Resource::get(FALSE)
+        ->addWhere('entity_table', '=', 'civicrm_contact')
+        ->addWhere('entity_id', '=', $participant['contact_id'])
+        ->execute()
+        ->single();
+    }
+    catch (\Exception $exception) {
+      // Participant contact is not a resource.
+      $resource = NULL;
+    }
+
+    return $resource;
+  }
+
+  public static function getResourceAssignmentForParticipant($participant_id) {
+    $participant = Participant::get(FALSE)
+      ->addSelect('contact_id', 'resource_information.resource_demand')
+      ->addWhere('id', '=', $participant_id)
+      ->execute()
+      ->single();
+    try {
+      $resource = Resource::get(FALSE)
+        ->addWhere('entity_table', '=', 'civicrm_contact')
+        ->addWhere('entity_id', '=', $participant['contact_id'])
+        ->execute()
+        ->single();
+      $resource_assignment = ResourceAssignment::get(FALSE)
+        ->addWhere('resource_id', '=', $resource['id'])
+        ->addWhere('resource_demand_id', '=', $participant['resource_information.resource_demand'])
+        ->execute()
+        ->single();
+    }
+    catch (\Exception $exception) {
+      // Participant contact is not a resource or no resource assignment found.
+      $resource_assignment = NULL;
+    }
+
+    return $resource_assignment;
   }
 
 }
