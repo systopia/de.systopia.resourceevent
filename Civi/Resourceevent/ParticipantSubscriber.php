@@ -15,18 +15,13 @@
 
 namespace Civi\Resourceevent;
 
-use Civi\Api4\CustomValue;
 use Civi\Api4\Participant;
-use Civi\Api4\Resource;
 use Civi\Api4\ResourceAssignment;
-use Civi\Api4\ResourceDemand;
 use Civi\Core\DAO\Event\PostDelete;
 use Civi\Core\DAO\Event\PostUpdate;
 use Civi\Core\DAO\Event\PreUpdate;
-use Civi\FormProcessor\Type\ParticipantStatusType;
 use CRM_Event_BAO_Participant;
 use CRM_Resourceevent_ExtensionUtil as E;
-use Stripe\Util\Util;
 
 class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventSubscriberInterface {
 
@@ -42,6 +37,15 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
     ];
   }
 
+  /**
+   * Handles pre-update events for participant objects.
+   *
+   * @param \Civi\Core\DAO\Event\PreUpdate $event
+   *
+   * @return void
+   * @throws \API_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
   public function preUpdateParticipant(PreUpdate $event) {
     if ($event->object instanceof CRM_Event_BAO_Participant) {
       $participant = Participant::get(FALSE)
@@ -60,14 +64,21 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
     }
   }
 
+  /**
+   * Handles post-insert and -update events for participant objects.
+   *
+   * @param \Civi\Core\DAO\Event\PostUpdate $event
+   *
+   * @return void
+   */
   public function insertUpdateParticipant(PostUpdate $event) {
     if ($event->object instanceof CRM_Event_BAO_Participant) {
       $participant = $event->object;
       // TODO: Avoid infinite loops between post hooks for ResourceAssignment
       //       and Participant entities.
 
-      // Delete resource assignment for participants with the resource role or
-      // those being withdrawn the resource role.
+      // Delete resource assignment for participants having or being withdrawn
+      // the resource role.
       if (
         (
           in_array(Utils::getResourceRole(), explode(\CRM_Core_DAO::VALUE_SEPARATOR, $participant->role_id))
@@ -80,6 +91,13 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
     }
   }
 
+  /**
+   * Handles post-delete events for participant objects.
+   *
+   * @param \Civi\Core\DAO\Event\PostDelete $event
+   *
+   * @return void
+   */
   public function deleteParticipant(PostDelete $event) {
     if ($event->object instanceof CRM_Event_BAO_Participant) {
       $participant = $event->object;
@@ -93,6 +111,15 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
     }
   }
 
+  /**
+   * Deletes a resource assignment for a given participant.
+   *
+   * @param \CRM_Event_BAO_Participant $participant
+   *
+   * @return void
+   * @throws \API_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
   public static function deleteResourceAssignment(CRM_Event_BAO_Participant $participant) {
     $resource_assignment = Utils::getResourceAssignmentForParticipant($participant->id);
     ResourceAssignment::delete(FALSE)
