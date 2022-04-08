@@ -59,7 +59,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
       ) {
         // About to withdraw the resource role from the participant, mark
         // participant as affected.
-        \Civi::$statics[__CLASS__]['affected_participants'][] = $participant['id'];
+        self::participantAffected($participant['id'], TRUE);
       }
     }
   }
@@ -84,7 +84,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
           self::participantHasResourceRole($participant)
           && \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant->status_id, 'Negative')
         )
-        || in_array($participant->id, \Civi::$statics[__CLASS__]['affected_participants'])
+        || self::participantAffected($participant->id)
       ) {
         self::deleteResourceAssignment($participant);
       }
@@ -132,6 +132,22 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
       Utils::getResourceRole(),
       explode(\CRM_Core_DAO::VALUE_SEPARATOR, $participant->role_id)
     );
+  }
+
+  public static function participantAffected($participant_id, $affected = NULL) {
+    $affected_participants = &\Civi::$statics[__CLASS__]['affected_participants'];
+    if (isset($affected)) {
+      if ($affected) {
+        $affected_participants[] = $participant_id;
+      }
+      else {
+        unset($affected_participants[array_search($participant_id, $affected_participants)]);
+      }
+    }
+    else {
+      $affected = in_array($participant_id, $affected_participants);
+    }
+    return $affected;
   }
 
 }
