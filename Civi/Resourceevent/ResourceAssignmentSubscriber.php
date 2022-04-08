@@ -45,6 +45,7 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
     if ($event->object instanceof CRM_Resource_BAO_ResourceAssignment) {
       // TODO: Avoid infinite loops between post hooks for ResourceAssignment
       //       and Participant entities.
+
       $resource_role = Utils::getResourceRole();
       $resource_assignment = $event->object;
       $resource = Resource::get(FALSE)
@@ -64,27 +65,22 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
           ->addWhere('event_id', '=', $resource_demand['entity_id'])
           ->addWhere('role_id', 'LIKE', '%' . implode(\CRM_Core_DAO::VALUE_SEPARATOR, [$resource_role]) . '%')
           ->execute();
-        $values = [
-          'contact_id' => $resource['entity_id'],
-          'event_id' => $resource_demand['entity_id'],
-          'role_id' => [$resource_role],
-          'resource_information.resource_demand' => $resource_demand['id'],
-          'status_id' => Utils::getDefaultParticipantStatus('positive'),
-          'register_date' => date('Y-m-d H:i:s'),
-        ];
         switch ($participants->count()) {
           case 0:
             Participant::create(FALSE)
-              ->setValues($values)
+              ->addValue('contact_id', $resource['entity_id'])
+              ->addValue('event_id', $resource_demand['entity_id'])
+              ->addValue('role_id', [$resource_role])
+              ->addValue('resource_information.resource_demand', $resource_demand['id'])
+              ->addValue('status_id', Utils::getDefaultParticipantStatus('positive'))
+              ->addValue('register_date', date('Y-m-d H:i:s'))
               ->execute();
             break;
           case 1:
             $participant = $participants->single();
-            // Keep current roles.
-            $values['role_id'] = $participant['role_id'];
             Participant::update(FALSE)
               ->addWhere('id', '=', $participant['id'])
-              ->setValues($values)
+              ->addValue('status_id', Utils::getDefaultParticipantStatus('positive'))
               ->execute();
             break;
           default:
@@ -101,11 +97,45 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
     if ($event->object instanceof CRM_Resource_BAO_ResourceAssignment) {
       // TODO: Avoid infinite loops between post hooks for ResourceAssignment
       //       and Participant entities.
-      // TODO: Create/update Participant with values (or update if exists only?):
-      //       - resource demand ID in custom field "resource_demand"
-      //       - contact ID from resource
-      //       - default negative participant status
-      //       - participant role "human_resource"
+
+      $resource_role = Utils::getResourceRole();
+      $resource_assignment = $event->object;
+      $resource = Resource::get(FALSE)
+        ->addWhere('id', '=', $resource_assignment->resource_id)
+        ->execute()
+        ->single();
+      $resource_demand = ResourceDemand::get(FALSE)
+        ->addWhere('id', '=', $resource_assignment->resource_demand_id)
+        ->execute()
+        ->single();
+      if (
+        $resource['entity_table'] == 'civicrm_contact'
+        && $resource_demand['entity_table'] == 'civicrm_event'
+      ) {
+        $participants = Participant::get(FALSE)
+          ->addWhere('contact_id', '=', $resource['entity_id'])
+          ->addWhere('event_id', '=', $resource_demand['entity_id'])
+          ->addWhere('role_id', 'LIKE', '%' . implode(\CRM_Core_DAO::VALUE_SEPARATOR, [$resource_role]) . '%')
+          ->execute();
+        switch ($participants->count()) {
+          case 0:
+            // No participant object exists, do not create one.
+            break;
+          case 1:
+            // Update existing Participant with default negative participant status.
+            $participant = $participants->single();
+            Participant::update(FALSE)
+              ->addWhere('id', '=', $participant['id'])
+              ->addValue('status_id', Utils::getDefaultParticipantStatus('negative'))
+              ->execute();
+            break;
+          default:
+            throw new \Exception(E::ts(
+              'More than one participant found with role %1.',
+              [1 => \CRM_Event_PseudoConstant::participantRole($resource_role)]
+            ));
+        }
+      }
     }
   }
 
