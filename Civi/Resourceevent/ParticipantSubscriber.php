@@ -81,7 +81,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
       // the resource role.
       if (
         (
-          in_array(Utils::getResourceRole(), explode(\CRM_Core_DAO::VALUE_SEPARATOR, $participant->role_id))
+          self::participantHasResourceRole($participant)
           && \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant->status_id, 'Negative')
         )
         || in_array($participant->id, \Civi::$statics[__CLASS__]['affected_participants'])
@@ -101,7 +101,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
   public function deleteParticipant(PostDelete $event) {
     if ($event->object instanceof CRM_Event_BAO_Participant) {
       $participant = $event->object;
-      if (in_array(Utils::getResourceRole(), explode(\CRM_Core_DAO::VALUE_SEPARATOR, $participant->role_id))) {
+      if (self::participantHasResourceRole($participant)) {
         // TODO: Avoid infinite loops between post hooks for ResourceAssignment
         //       and Participant entities.
 
@@ -125,6 +125,13 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
     ResourceAssignment::delete(FALSE)
       ->addWhere('id', '=', $resource_assignment['id'])
       ->execute();
+  }
+
+  public static function participantHasResourceRole(CRM_Event_BAO_Participant $participant) {
+    return in_array(
+      Utils::getResourceRole(),
+      explode(\CRM_Core_DAO::VALUE_SEPARATOR, $participant->role_id)
+    );
   }
 
 }
