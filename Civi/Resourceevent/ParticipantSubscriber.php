@@ -77,8 +77,6 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
       // TODO: Avoid infinite loops between post hooks for ResourceAssignment
       //       and Participant entities.
 
-      // Delete resource assignment for participants having or being withdrawn
-      // the resource role.
       if (
         (
           self::participantHasResourceRole($participant)
@@ -86,7 +84,18 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
         )
         || self::participantAffected($participant->id)
       ) {
+        // Delete resource assignment for participants with a negative status
+        // having or being withdrawn the resource role.
         self::deleteResourceAssignment($participant);
+      }
+      elseif (
+        self::participantHasResourceRole($participant)
+        && \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant->status_id, 'Positive')
+        && self::participantHasResourceDemand($participant)
+      ) {
+        // Create resource assignment for participants with a positive status
+        // having the resource role and a resource demand stored.
+        self::createResourceAssignment($participant);
       }
     }
   }
@@ -108,6 +117,20 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
         // Delete ResourceAssignment
         self::deleteResourceAssignment($participant);
       }
+    }
+  }
+
+  public static function createResourceAssignment(CRM_Event_BAO_Participant $participant) {
+    if (!Utils::getResourceAssignmentForParticipant($participant->id)) {
+      $participant = Participant::get(FALSE)
+        ->addSelect('resource_information.resource_demand')
+        ->addWhere('id', '=', $participant->id)
+        ->execute()
+        ->single();
+      ResourceAssignment::create(FALSE)
+        ->addValue('resource_id', Utils::getResourceForParticipant($participant['id']))
+        ->addValue('resource_demand_id', $participant['resource_information.resource_demand'])
+        ->execute();
     }
   }
 
@@ -148,6 +171,20 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
       $affected = in_array($participant_id, $affected_participants);
     }
     return $affected;
+  }
+
+  public static function participantHasResourceDemand(CRM_Event_BAO_Participant $participant) {
+    try {
+      Participant::get(FALSE)
+        ->addWhere('id', '=', $participant->id)
+        ->addWhere('resource_information.resource_demand', 'IS NOT EMPTY')
+        ->execute()
+        ->single();
+      return TRUE;
+    }
+    catch (\Exception $exception) {
+      return FALSE;
+    }
   }
 
 }
