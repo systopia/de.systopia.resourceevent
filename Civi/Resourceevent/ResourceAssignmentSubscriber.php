@@ -47,15 +47,7 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
       //       and Participant entities.
 
       $resource_role = Utils::getResourceRole();
-      $resource_assignment = $event->object;
-      $resource = Resource::get(FALSE)
-        ->addWhere('id', '=', $resource_assignment->resource_id)
-        ->execute()
-        ->single();
-      $resource_demand = ResourceDemand::get(FALSE)
-        ->addWhere('id', '=', $resource_assignment->resource_demand_id)
-        ->execute()
-        ->single();
+      [$resource, $resource_demand] = self::getResourceAssignmentContext($event->object);
       if (
         $resource['entity_table'] == 'civicrm_contact'
         && $resource_demand['entity_table'] == 'civicrm_event'
@@ -99,15 +91,7 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
       //       and Participant entities.
 
       $resource_role = Utils::getResourceRole();
-      $resource_assignment = $event->object;
-      $resource = Resource::get(FALSE)
-        ->addWhere('id', '=', $resource_assignment->resource_id)
-        ->execute()
-        ->single();
-      $resource_demand = ResourceDemand::get(FALSE)
-        ->addWhere('id', '=', $resource_assignment->resource_demand_id)
-        ->execute()
-        ->single();
+      [$resource, $resource_demand] = self::getResourceAssignmentContext($event->object);
       if (
         $resource['entity_table'] == 'civicrm_contact'
         && $resource_demand['entity_table'] == 'civicrm_event'
@@ -137,6 +121,19 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
         }
       }
     }
+  }
+
+  public static function getResourceAssignmentContext(CRM_Resource_BAO_ResourceAssignment $resource_assignment) {
+    $resource = Resource::get(FALSE)
+      ->addWhere('id', '=', $resource_assignment->resource_id)
+      ->execute()
+      ->single();
+    $resource_demand = ResourceDemand::get(FALSE)
+      ->addWhere('id', '=', $resource_assignment->resource_demand_id)
+      ->execute()
+      ->single();
+
+    return [$resource, $resource_demand];
   }
 
 }
