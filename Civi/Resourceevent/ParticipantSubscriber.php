@@ -30,7 +30,8 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
    */
   public static function getSubscribedEvents() {
     return [
-      'civi.dao.preUpdate' => 'preUpdateParticipant',
+      'civi.dao.preInsert' => 'preInsertUpdateParticipant',
+      'civi.dao.preUpdate' => 'preInsertUpdateParticipant',
       'civi.dao.postInsert' => 'insertUpdateParticipant',
       'civi.dao.postUpdate' => 'insertUpdateParticipant',
       'civi.dao.postDelete' => 'deleteParticipant',
@@ -38,28 +39,44 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
   }
 
   /**
-   * Handles pre-update events for participant objects.
+   * Handles pre-insert and -update events for participant objects.
    *
-   * @param \Civi\Core\DAO\Event\PreUpdate $event
+   * @param PreUpdate $event
    *
    * @return void
    * @throws \API_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
-  public function preUpdateParticipant(PreUpdate $event) {
+  public function preInsertUpdateParticipant(PreUpdate $event) {
     if ($event->object instanceof CRM_Event_BAO_Participant) {
-      $participant = Participant::get(FALSE)
-        ->addWhere('id', '=', $event->object->id)
-        ->execute()
-        ->single();
-      $resource_role = Utils::getResourceRole();
+      $participant = (array) $event->object;
+      try {
+        $current_participant = Participant::get(FALSE)
+          ->addWhere('id', '=', $participant['id'])
+          ->execute()
+          ->single();
+      }
+      catch (\Exception $exception) {
+        // No existing participant, this is an insert.
+      }
+
       if (
-        in_array($resource_role, $participant['role_id'])
-        && !in_array($resource_role, explode(\CRM_Core_DAO::VALUE_SEPARATOR, $event->object->role_id))
+        isset($current_participant)
+        && self::participantHasResourceRole($current_participant)
+        && !self::participantHasResourceRole($participant)
       ) {
         // About to withdraw the resource role from the participant, mark
         // participant as affected.
         self::participantAffected($participant['id'], TRUE);
+      }
+
+      if (
+        self::participantHasResourceRole($participant)
+        && !self::participantHasResourceDemand($participant)
+      ) {
+        // About to be assigned the resource role without a resource demand,
+        // abort the action.
+        throw new \Exception(E::ts('Could not add participant with resource role without a resource demand.'));
       }
     }
   }
@@ -73,16 +90,16 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
    */
   public function insertUpdateParticipant(PostUpdate $event) {
     if ($event->object instanceof CRM_Event_BAO_Participant) {
-      $participant = $event->object;
+      $participant = (array) $event->object;
       // TODO: Avoid infinite loops between post hooks for ResourceAssignment
       //       and Participant entities.
 
       if (
         (
           self::participantHasResourceRole($participant)
-          && \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant->status_id, 'Negative')
+          && \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant['status_id'], 'Negative')
         )
-        || self::participantAffected($participant->id)
+        || self::participantAffected($participant['id'])
       ) {
         // Delete resource assignment for participants with a negative status
         // having or being withdrawn the resource role.
@@ -90,7 +107,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
       }
       elseif (
         self::participantHasResourceRole($participant)
-        && \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant->status_id, 'Positive')
+        && \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant['status_id'], 'Positive')
         && self::participantHasResourceDemand($participant)
       ) {
         // Create resource assignment for participants with a positive status
@@ -109,7 +126,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
    */
   public function deleteParticipant(PostDelete $event) {
     if ($event->object instanceof CRM_Event_BAO_Participant) {
-      $participant = $event->object;
+      $participant = (array) $event->object;
       if (self::participantHasResourceRole($participant)) {
         // TODO: Avoid infinite loops between post hooks for ResourceAssignment
         //       and Participant entities.
@@ -120,11 +137,20 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
     }
   }
 
-  public static function createResourceAssignment(CRM_Event_BAO_Participant $participant) {
-    if (!Utils::getResourceAssignmentForParticipant($participant->id)) {
+  /**
+   * Creates a resource assignment for a given participant.
+   *
+   * @param array $participant
+   *
+   * @return void
+   * @throws \API_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
+  public static function createResourceAssignment(array $participant) {
+    if (!Utils::getResourceAssignmentForParticipant($participant['id'])) {
       $participant = Participant::get(FALSE)
         ->addSelect('resource_information.resource_demand')
-        ->addWhere('id', '=', $participant->id)
+        ->addWhere('id', '=', $participant['id'])
         ->execute()
         ->single();
       ResourceAssignment::create(FALSE)
@@ -137,28 +163,47 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
   /**
    * Deletes a resource assignment for a given participant.
    *
-   * @param \CRM_Event_BAO_Participant $participant
+   * @param array $participant
    *
    * @return void
    * @throws \API_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
-  public static function deleteResourceAssignment(CRM_Event_BAO_Participant $participant) {
+  public static function deleteResourceAssignment(array $participant) {
     $resource_assignment = Utils::getResourceAssignmentForParticipant($participant->id);
     ResourceAssignment::delete(FALSE)
       ->addWhere('id', '=', $resource_assignment['id'])
       ->execute();
   }
 
-  public static function participantHasResourceRole(CRM_Event_BAO_Participant $participant) {
+  /**
+   * Checks whether a given participant is currently assigned the resource role.
+   *
+   * @param array $participant
+   *
+   * @return bool
+   */
+  public static function participantHasResourceRole(array $participant) {
     return in_array(
       Utils::getResourceRole(),
-      explode(\CRM_Core_DAO::VALUE_SEPARATOR, $participant->role_id)
+      is_array($participant['role_id']) ? $participant['role_id'] : explode(\CRM_Core_DAO::VALUE_SEPARATOR, $participant['role_id'])
     );
   }
 
+  /**
+   * Checks or sets a given participant being subject to change during an insert
+   * or update. This utilises a static storage for handing affected participants
+   * from pre event to post event implementations.
+   *
+   * @param $participant_id
+   * @param $affected
+   *
+   * @return bool
+   */
   public static function participantAffected($participant_id, $affected = NULL) {
-    $affected_participants = &\Civi::$statics[__CLASS__]['affected_participants'];
+    if (!is_array($affected_participants = &\Civi::$statics[__CLASS__]['affected_participants'])) {
+      $affected_participants = [];
+    }
     if (isset($affected)) {
       if ($affected) {
         $affected_participants[] = $participant_id;
@@ -173,10 +218,17 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
     return $affected;
   }
 
-  public static function participantHasResourceDemand(CRM_Event_BAO_Participant $participant) {
+  /**
+   * Checks whether a given participant currently has a resource demand stored.
+   *
+   * @param array $participant
+   *
+   * @return bool
+   */
+  public static function participantHasResourceDemand(array $participant) {
     try {
       Participant::get(FALSE)
-        ->addWhere('id', '=', $participant->id)
+        ->addWhere('id', '=', $participant['id'])
         ->addWhere('resource_information.resource_demand', 'IS NOT EMPTY')
         ->execute()
         ->single();
