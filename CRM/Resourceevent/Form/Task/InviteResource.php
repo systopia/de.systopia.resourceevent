@@ -13,6 +13,7 @@
 | written permission from the original author(s).        |
 +--------------------------------------------------------*/
 
+use Civi\Resourceevent\Utils;
 use CRM_Resourceevent_ExtensionUtil as E;
 
 /**
@@ -26,8 +27,25 @@ class CRM_Resourceevent_Form_Task_InviteResource extends CRM_Eventinvitation_For
   public function buildQuickForm() {
     parent::buildQuickForm();
 
-    // TODO: Remove the element and add it as a value element without a field.
+    $this->setTitle(E::ts("Inviting %1 Contacts as resources", [1 => count($this->_contactIds)]));
+
+    // Remove the element and add it as a static value element without a field, as the resource role is not subject to change.
     $this->removeElement(self::PARTICIPANT_ROLES_ELEMENT_NAME);
+    $this->setConstants([self::PARTICIPANT_ROLES_ELEMENT_NAME => Utils::getResourceRole()]);
+    $this->add(
+      'hiddenselect',
+      self::PARTICIPANT_ROLES_ELEMENT_NAME,
+      E::ts('Participant role'),
+      Utils::getResourceRole(TRUE),
+      TRUE,
+    );
+
+    // TODO: Add field for selecting resource demand.
+  }
+
+  public function validate() {
+    $this->_submitValues[self::PARTICIPANT_ROLES_ELEMENT_NAME] = Utils::getResourceRole();
+    return parent::validate();
   }
 
 }

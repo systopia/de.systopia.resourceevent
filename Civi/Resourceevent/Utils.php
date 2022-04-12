@@ -24,13 +24,14 @@ use CRM_Resourceevent_ExtensionUtil as E;
 
 class Utils {
 
-  public static function getResourceRole() {
-    return OptionValue::get(FALSE)
-      ->addSelect('value')
+  public static function getResourceRole($map = FALSE) {
+    $role = OptionValue::get(FALSE)
+      ->addSelect('value', 'label')
       ->addWhere('option_group_id.name', '=', 'participant_role')
       ->addWhere('name', '=', 'human_resource')
       ->execute()
-      ->single()['value'];
+      ->single();
+    return $map ? [$role['value'] => $role['label']] : $role['value'];
   }
 
   public static function getDefaultParticipantStatus($class) {

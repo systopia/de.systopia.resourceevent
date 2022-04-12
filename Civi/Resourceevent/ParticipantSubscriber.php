@@ -76,7 +76,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
       ) {
         // About to be assigned the resource role without a resource demand,
         // abort the action.
-        throw new \Exception(E::ts('Could not add participant with resource role without a resource demand.'));
+        throw new \Exception(E::ts('Could not add/edit participant with resource role without a resource demand.'));
       }
     }
   }
