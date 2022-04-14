@@ -42,9 +42,6 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
    */
   public function insertUpdateResourceAssignment(PostUpdate $event) {
     if ($event->object instanceof \CRM_Resource_DAO_ResourceAssignment) {
-      // TODO: Avoid infinite loops between post hooks for ResourceAssignment
-      //       and Participant entities.
-
       $resource_role = Utils::getResourceRole();
       [$resource, $resource_demand] = self::getResourceAssignmentContext($event->object);
       if (
@@ -69,11 +66,18 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
             break;
           case 1:
             $participant = $participants->single();
-            Participant::update(FALSE)
-              ->addWhere('id', '=', $participant['id'])
-              ->addValue('status_id', Utils::getDefaultParticipantStatus('Positive'))
-              ->addValue('resource_information.resource_demand', $resource_demand['id'])
-              ->execute();
+            // Don't update if this is being triggered from a participant
+            // insert/update, using a CiviCRM static variable.
+            if (!is_array($editing_participants = &\Civi::$statics['resourceevent']['editing_participants'])) {
+              $editing_participants = [];
+            }
+            if (!in_array($participant['id'], $editing_participants)) {
+              Participant::update(FALSE)
+                ->addWhere('id', '=', $participant['id'])
+                ->addValue('status_id', Utils::getDefaultParticipantStatus('Positive'))
+                ->addValue('resource_information.resource_demand', $resource_demand['id'])
+                ->execute();
+            }
             break;
           default:
             throw new \Exception(E::ts(
@@ -87,9 +91,6 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
 
   public function deleteResourceAssignment(PostDelete $event) {
     if ($event->object instanceof \CRM_Resource_DAO_ResourceAssignment) {
-      // TODO: Avoid infinite loops between post hooks for ResourceAssignment
-      //       and Participant entities.
-
       $resource_role = Utils::getResourceRole();
       [$resource, $resource_demand] = self::getResourceAssignmentContext($event->object);
       if (
@@ -108,10 +109,17 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
           case 1:
             // Update existing Participant with default negative participant status.
             $participant = $participants->single();
-            Participant::update(FALSE)
-              ->addWhere('id', '=', $participant['id'])
-              ->addValue('status_id', Utils::getDefaultParticipantStatus('Negative'))
-              ->execute();
+            // Don't update if this is being triggered from a participant
+            // insert/update, using a CiviCRM static variable.
+            if (!is_array($editing_participants = &\Civi::$statics['resourceevent']['editing_participants'])) {
+              $editing_participants = [];
+            }
+            if (!in_array($participant['id'], $editing_participants)) {
+              Participant::update(FALSE)
+                ->addWhere('id', '=', $participant['id'])
+                ->addValue('status_id', Utils::getDefaultParticipantStatus('Negative'))
+                ->execute();
+            }
             break;
           default:
             throw new \Exception(E::ts(
