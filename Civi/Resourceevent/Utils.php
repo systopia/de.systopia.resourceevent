@@ -15,7 +15,6 @@
 
 namespace Civi\Resourceevent;
 
-use Civi\Api4\CustomField;
 use Civi\Api4\OptionValue;
 use Civi\Api4\Participant;
 use Civi\Api4\Resource;
@@ -47,7 +46,7 @@ class Utils {
         [
           'sequential' => 1,
           'return' => ['id'],
-          'class' => 'Positive',
+          'class' => $class,
           'is_active' => 1,
           'options' => ['sort' => 'weight ASC'],
         ]

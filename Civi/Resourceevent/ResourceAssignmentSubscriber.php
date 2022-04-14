@@ -20,7 +20,6 @@ use Civi\Api4\Resource;
 use Civi\Api4\ResourceDemand;
 use Civi\Core\DAO\Event\PostDelete;
 use Civi\Core\DAO\Event\PostUpdate;
-use CRM_Resource_BAO_ResourceAssignment;
 use CRM_Resourceevent_ExtensionUtil as E;
 
 class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher\EventSubscriberInterface {
@@ -42,7 +41,7 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
    * @throws \Exception
    */
   public function insertUpdateResourceAssignment(PostUpdate $event) {
-    if ($event->object instanceof CRM_Resource_BAO_ResourceAssignment) {
+    if ($event->object instanceof \CRM_Resource_DAO_ResourceAssignment) {
       // TODO: Avoid infinite loops between post hooks for ResourceAssignment
       //       and Participant entities.
 
@@ -72,7 +71,8 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
             $participant = $participants->single();
             Participant::update(FALSE)
               ->addWhere('id', '=', $participant['id'])
-              ->addValue('status_id', Utils::getDefaultParticipantStatus('positive'))
+              ->addValue('status_id', Utils::getDefaultParticipantStatus('Positive'))
+              ->addValue('resource_information.resource_demand', $resource_demand['id'])
               ->execute();
             break;
           default:
@@ -86,7 +86,7 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
   }
 
   public function deleteResourceAssignment(PostDelete $event) {
-    if ($event->object instanceof CRM_Resource_BAO_ResourceAssignment) {
+    if ($event->object instanceof \CRM_Resource_DAO_ResourceAssignment) {
       // TODO: Avoid infinite loops between post hooks for ResourceAssignment
       //       and Participant entities.
 
@@ -110,7 +110,7 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
             $participant = $participants->single();
             Participant::update(FALSE)
               ->addWhere('id', '=', $participant['id'])
-              ->addValue('status_id', Utils::getDefaultParticipantStatus('negative'))
+              ->addValue('status_id', Utils::getDefaultParticipantStatus('Negative'))
               ->execute();
             break;
           default:
@@ -123,7 +123,7 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
     }
   }
 
-  public static function getResourceAssignmentContext(CRM_Resource_BAO_ResourceAssignment $resource_assignment) {
+  public static function getResourceAssignmentContext(\CRM_Resource_DAO_ResourceAssignment $resource_assignment) {
     $resource = Resource::get(FALSE)
       ->addWhere('id', '=', $resource_assignment->resource_id)
       ->execute()

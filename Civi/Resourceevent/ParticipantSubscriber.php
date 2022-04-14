@@ -18,9 +18,7 @@ namespace Civi\Resourceevent;
 use Civi\Api4\Participant;
 use Civi\Api4\ResourceAssignment;
 use Civi\Core\DAO\Event\PostDelete;
-use Civi\Core\DAO\Event\PostUpdate;
 use Civi\Core\DAO\Event\PreUpdate;
-use CRM_Event_BAO_Participant;
 use CRM_Resourceevent_ExtensionUtil as E;
 
 class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventSubscriberInterface {
@@ -30,12 +28,28 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
    */
   public static function getSubscribedEvents() {
     return [
-      'civi.dao.preInsert' => 'preInsertUpdateParticipant',
-      'civi.dao.preUpdate' => 'preInsertUpdateParticipant',
-      'civi.dao.postInsert' => 'insertUpdateParticipant',
-      'civi.dao.postUpdate' => 'insertUpdateParticipant',
+      '&hook_civicrm_pre' => 'preInsertUpdateParticipant',
+      '&hook_civicrm_post' => 'delegatePostCallback',
       'civi.dao.postDelete' => 'deleteParticipant',
+      '&hook_civicrm_buildForm' => 'buildParticipantForm',
+      '&hook_civicrm_validateForm' => 'validateParticipantForm',
     ];
+  }
+
+  public function delegatePostCallback($op, $objectName, $objectId, &$objectRef) {
+    if ($objectName == 'Participant' && in_array($op, ['create', 'edit'])) {
+      if (\CRM_Core_Transaction::isActive()) {
+        \CRM_Core_Transaction::addCallback(
+          \CRM_Core_Transaction::PHASE_POST_COMMIT,
+          [self::class, 'insertUpdateParticipant'],
+          [$op, $objectName, $objectId, &$objectRef]
+        );
+      }
+      // If the transaction is already finished, call the function directly
+      else {
+        self::insertUpdateParticipant($op, $objectName, $objectId, $objectRef);
+      }
+    }
   }
 
   /**
@@ -47,32 +61,30 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
    * @throws \API_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
-  public function preInsertUpdateParticipant(PreUpdate $event) {
-    if ($event->object instanceof CRM_Event_BAO_Participant) {
-      $participant = (array) $event->object;
-      try {
+  public function preInsertUpdateParticipant($op, $objectName, $id, &$params) {
+    if ($objectName == 'Participant' && in_array($op, ['create', 'edit'])) {
+      if (!empty($id)) {
         $current_participant = Participant::get(FALSE)
-          ->addWhere('id', '=', $participant['id'])
+          ->addSelect('role_id', 'resource_information.resource_demand')
+          ->addWhere('id', '=', $id)
           ->execute()
           ->single();
-      }
-      catch (\Exception $exception) {
-        // No existing participant, this is an insert.
+        $params += $current_participant;
       }
 
       if (
         isset($current_participant)
         && self::participantHasResourceRole($current_participant)
-        && !self::participantHasResourceRole($participant)
+        && !self::participantHasResourceRole($params)
       ) {
         // About to withdraw the resource role from the participant, mark
         // participant as affected.
-        self::participantAffected($participant['id'], TRUE);
+        self::participantAffected($id, TRUE);
       }
 
       if (
-        self::participantHasResourceRole($participant)
-        && !self::participantHasResourceDemand($participant)
+        self::participantHasResourceRole($params)
+        && !self::participantHasResourceDemand($params)
       ) {
         // About to be assigned the resource role without a resource demand,
         // abort the action.
@@ -88,32 +100,34 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
    *
    * @return void
    */
-  public function insertUpdateParticipant(PostUpdate $event) {
-    if ($event->object instanceof CRM_Event_BAO_Participant) {
-      $participant = (array) $event->object;
-      // TODO: Avoid infinite loops between post hooks for ResourceAssignment
-      //       and Participant entities.
+  public function insertUpdateParticipant($op, $objectName, $objectId, &$objectRef) {
+    $participant = Participant::get(FALSE)
+      ->addSelect('role_id', 'status_id', 'resource_information.resource_demand')
+      ->addWhere('id', '=', $objectId)
+      ->execute()
+      ->single();
+    // TODO: Avoid infinite loops between post hooks for ResourceAssignment
+    //       and Participant entities.
 
-      if (
-        (
-          self::participantHasResourceRole($participant)
-          && \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant['status_id'], 'Negative')
-        )
-        || self::participantAffected($participant['id'])
-      ) {
-        // Delete resource assignment for participants with a negative status
-        // having or being withdrawn the resource role.
-        self::deleteResourceAssignment($participant);
-      }
-      elseif (
+    if (
+      (
         self::participantHasResourceRole($participant)
-        && \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant['status_id'], 'Positive')
-        && self::participantHasResourceDemand($participant)
-      ) {
-        // Create resource assignment for participants with a positive status
-        // having the resource role and a resource demand stored.
-        self::createResourceAssignment($participant);
-      }
+        && \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant['status_id'], 'Negative')
+      )
+      || self::participantAffected($participant['id'])
+    ) {
+      // Delete resource assignment for participants with a negative status
+      // having or being withdrawn the resource role.
+      self::deleteResourceAssignment($participant);
+    }
+    elseif (
+      self::participantHasResourceRole($participant)
+      && \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant['status_id'], 'Positive')
+      && self::participantHasResourceDemand($participant)
+    ) {
+      // Create resource assignment for participants with a positive status
+      // having the resource role and a resource demand stored.
+      self::createResourceAssignment($participant);
     }
   }
 
@@ -125,14 +139,64 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
    * @return void
    */
   public function deleteParticipant(PostDelete $event) {
-    if ($event->object instanceof CRM_Event_BAO_Participant) {
+    if ($event->object instanceof \CRM_Event_DAO_Participant) {
       $participant = (array) $event->object;
+      // TODO: The object has nothing but its ID, so this won't work:
       if (self::participantHasResourceRole($participant)) {
         // TODO: Avoid infinite loops between post hooks for ResourceAssignment
         //       and Participant entities.
 
         // Delete ResourceAssignment
         self::deleteResourceAssignment($participant);
+      }
+    }
+  }
+
+  /**
+   * Handles hook_civicrm_buildForm events for participant forms.
+   */
+  public function buildParticipantForm($formName, \CRM_Core_Form &$form) {
+    // Remove resource role from role selection fields on participant-related
+    // forms, if it is not in their current values.
+    $forms = [
+      'CRM_Eventinvitation_Form_Task_ContactSearch' => \CRM_Eventinvitation_Form_Task_ContactSearch::PARTICIPANT_ROLES_ELEMENT_NAME,
+      'CRM_Event_Form_Participant' => 'role_id',
+    ];
+    if (array_key_exists($formName, $forms)) {
+      try {
+        $roles_element = &$form->getElement($forms[$formName]);
+        if (!in_array(Utils::getResourceRole(), $roles_element->getValue())) {
+          foreach ($roles_element->_options as $key => $option) {
+            if ($option['attr']['value'] == Utils::getResourceRole()) {
+              unset($roles_element->_options[$key]);
+            }
+          }
+        }
+      }
+      catch (\Exception $exception) {
+        // Element does not exist in form, this is most likely a delete action.
+      }
+    }
+  }
+
+  /**
+   * Handles hook_civicrm_validateForm events for participant forms.
+   */
+  public function validateParticipantForm($formName, &$fields, &$files, &$form, &$errors) {
+    // Do not allow selecting the resource role on participant-related forms.
+    $forms = [
+      'CRM_Eventinvitation_Form_Task_ContactSearch' => \CRM_Eventinvitation_Form_Task_ContactSearch::PARTICIPANT_ROLES_ELEMENT_NAME,
+      'CRM_Event_Form_Participant' => 'role_id',
+    ];
+    if (array_key_exists($formName, $forms)) {
+      $role_field = $fields[$forms[$formName]];
+      if (!empty($role_field) && !is_array($role_field)) {
+        $fields[$forms[$formName]] = [$role_field];
+      }
+      if (in_array(Utils::getResourceRole(), $fields[$forms[$formName]])) {
+        $errors[$forms[$formName]] = E::ts(
+          'The CiviResource Event role is not allowed to be selected.'
+        );
       }
     }
   }
@@ -170,7 +234,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   public static function deleteResourceAssignment(array $participant) {
-    $resource_assignment = Utils::getResourceAssignmentForParticipant($participant->id);
+    $resource_assignment = Utils::getResourceAssignmentForParticipant($participant['id']);
     ResourceAssignment::delete(FALSE)
       ->addWhere('id', '=', $resource_assignment['id'])
       ->execute();
@@ -226,17 +290,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
    * @return bool
    */
   public static function participantHasResourceDemand(array $participant) {
-    try {
-      Participant::get(FALSE)
-        ->addWhere('id', '=', $participant['id'])
-        ->addWhere('resource_information.resource_demand', 'IS NOT EMPTY')
-        ->execute()
-        ->single();
-      return TRUE;
-    }
-    catch (\Exception $exception) {
-      return FALSE;
-    }
+    return !empty($participant['resource_information.resource_demand']);
   }
 
 }
