@@ -146,6 +146,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
     $forms = [
       'CRM_Eventinvitation_Form_Task_ContactSearch' => \CRM_Eventinvitation_Form_Task_ContactSearch::PARTICIPANT_ROLES_ELEMENT_NAME,
       'CRM_Event_Form_Participant' => 'role_id',
+      'CRM_Event_Form_Task_Register' => 'role_id',
     ];
     if (array_key_exists($formName, $forms)) {
       try {
@@ -172,6 +173,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
     $forms = [
       'CRM_Eventinvitation_Form_Task_ContactSearch' => \CRM_Eventinvitation_Form_Task_ContactSearch::PARTICIPANT_ROLES_ELEMENT_NAME,
       'CRM_Event_Form_Participant' => 'role_id',
+      'CRM_Event_Form_Task_Register' => 'role_id',
     ];
     if (array_key_exists($formName, $forms)) {
       try {
