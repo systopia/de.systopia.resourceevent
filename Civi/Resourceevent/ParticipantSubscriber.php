@@ -28,9 +28,8 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
    */
   public static function getSubscribedEvents() {
     return [
-      '&hook_civicrm_pre' => 'preInsertUpdateParticipant',
+      '&hook_civicrm_pre' => 'preParticipant',
       '&hook_civicrm_post' => 'delegatePostCallback',
-      'civi.dao.postDelete' => 'deleteParticipant',
       '&hook_civicrm_buildForm' => 'buildParticipantForm',
       '&hook_civicrm_validateForm' => 'validateParticipantForm',
     ];
@@ -38,6 +37,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
 
   public function delegatePostCallback($op, $objectName, $objectId, &$objectRef) {
     if ($objectName == 'Participant' && in_array($op, ['create', 'edit'])) {
+      // If we're inside a transaction, register a callback.
       if (\CRM_Core_Transaction::isActive()) {
         \CRM_Core_Transaction::addCallback(
           \CRM_Core_Transaction::PHASE_POST_COMMIT,
@@ -45,7 +45,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
           [$op, $objectName, $objectId, &$objectRef]
         );
       }
-      // If the transaction is already finished, call the function directly
+      // If the transaction is already finished, call the function directly.
       else {
         self::insertUpdateParticipant($op, $objectName, $objectId, $objectRef);
       }
@@ -55,14 +55,12 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
   /**
    * Handles pre-insert and -update events for participant objects.
    *
-   * @param PreUpdate $event
-   *
    * @return void
    * @throws \API_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
-  public function preInsertUpdateParticipant($op, $objectName, $id, &$params) {
-    if ($objectName == 'Participant' && in_array($op, ['create', 'edit'])) {
+  public function preParticipant($op, $objectName, $id, &$params) {
+    if ($objectName == 'Participant') {
       if (!empty($id)) {
         \Civi::$statics['resourceevent']['editing_participants'][] = $id;
         $current_participant = Participant::get(FALSE)
@@ -72,24 +70,29 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
           ->single();
         $params += $current_participant;
       }
+      if (in_array($op, ['create', 'edit'])) {
+        if (
+          isset($current_participant)
+          && self::participantHasResourceRole($current_participant)
+          && !self::participantHasResourceRole($params)
+        ) {
+          // About to withdraw the resource role from the participant, mark
+          // participant as affected.
+          self::participantAffected($id, TRUE);
+        }
 
-      if (
-        isset($current_participant)
-        && self::participantHasResourceRole($current_participant)
-        && !self::participantHasResourceRole($params)
-      ) {
-        // About to withdraw the resource role from the participant, mark
-        // participant as affected.
-        self::participantAffected($id, TRUE);
+        if (
+          self::participantHasResourceRole($params)
+          && !self::participantHasResourceDemand($params)
+        ) {
+          // About to be assigned the resource role without a resource demand,
+          // abort the action.
+          throw new \Exception(E::ts('Could not add/edit participant with resource role without a resource demand.'));
+        }
       }
-
-      if (
-        self::participantHasResourceRole($params)
-        && !self::participantHasResourceDemand($params)
-      ) {
-        // About to be assigned the resource role without a resource demand,
-        // abort the action.
-        throw new \Exception(E::ts('Could not add/edit participant with resource role without a resource demand.'));
+      elseif ($op == 'delete') {
+        // About to delete the participant, delete the resource assignment.
+        self::deleteResourceAssignment($current_participant);
       }
     }
   }
@@ -131,24 +134,6 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
       // Create resource assignment for participants with a positive status
       // having the resource role and a resource demand stored.
       self::createResourceAssignment($participant);
-    }
-  }
-
-  /**
-   * Handles post-delete events for participant objects.
-   *
-   * @param \Civi\Core\DAO\Event\PostDelete $event
-   *
-   * @return void
-   */
-  public function deleteParticipant(PostDelete $event) {
-    if ($event->object instanceof \CRM_Event_DAO_Participant) {
-      $participant = (array) $event->object;
-      // TODO: The object has nothing but its ID, so this won't work. Use a pre hook for retrieving relevant participant data.
-      if (self::participantHasResourceRole($participant)) {
-        // Delete ResourceAssignment
-        self::deleteResourceAssignment($participant);
-      }
     }
   }
 
