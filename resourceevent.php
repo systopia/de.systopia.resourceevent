@@ -213,22 +213,6 @@ function resourceevent_civicrm_managed(&$entities) {
 }
 
 /**
- * Implements hook_civicrm_searchTasks().
- */
-function resourceevent_civicrm_searchTasks($objectType, &$tasks)
-{
-  // Add "Invite as resource" task action for contact search results.
-  $manager = CRM_Extension_System::singleton()->getManager();
-  if ($objectType == 'contact' && $manager->getStatus('de.systopia.eventinvitation') === CRM_Extension_Manager::STATUS_INSTALLED) {
-    $tasks[] = [
-      'title' => E::ts('Invite as resource for event'),
-      'class' => 'CRM_Resourceevent_Form_Task_InviteResource',
-      'result' => false
-    ];
-  }
-}
-
-/**
  * Implements hook_civicrm_caseTypes().
  *
  * Add CiviCase types provided by this extension.

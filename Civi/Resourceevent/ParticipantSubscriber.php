@@ -144,7 +144,6 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
     // Remove resource role from role selection fields on participant-related
     // forms, if it is not in their current values.
     $forms = [
-      'CRM_Eventinvitation_Form_Task_ContactSearch' => \CRM_Eventinvitation_Form_Task_ContactSearch::PARTICIPANT_ROLES_ELEMENT_NAME,
       'CRM_Event_Form_Participant' => 'role_id',
       'CRM_Event_Form_Task_Register' => 'role_id',
     ];
@@ -171,7 +170,6 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
   public function validateParticipantForm($formName, &$fields, &$files, &$form, &$errors) {
     // Do not allow selecting the resource role on participant-related forms.
     $forms = [
-      'CRM_Eventinvitation_Form_Task_ContactSearch' => \CRM_Eventinvitation_Form_Task_ContactSearch::PARTICIPANT_ROLES_ELEMENT_NAME,
       'CRM_Event_Form_Participant' => 'role_id',
       'CRM_Event_Form_Task_Register' => 'role_id',
     ];
