@@ -37,7 +37,7 @@ class Utils {
     if (!in_array(strtolower($class), ['positive', 'negative'])) {
       throw new \Exception(E::ts('Unknown participant status class %1.', [1 => $class]));
     }
-    if (!$status_id = \Civi::settings()->get('resourceevent_participant_status_' . strtolower($class))) {
+    if (!$status_id = \Civi::settings()->get('resourceevent_default_participant_status_id_' . strtolower($class))) {
       // If no specific status is configured, use the one with the most
       // significant weight.
       $result = civicrm_api3(
