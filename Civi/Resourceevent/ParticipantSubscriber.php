@@ -146,6 +146,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
     $forms = [
       'CRM_Event_Form_Participant' => 'role_id',
       'CRM_Event_Form_Task_Register' => 'role_id',
+      'CRM_Event_Form_ManageEvent_EventInfo' => 'default_role_id',
     ];
     if (array_key_exists($formName, $forms)) {
       try {
