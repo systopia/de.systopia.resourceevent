@@ -29,7 +29,8 @@ return [
     'add' => '4.3',
     'is_domain' => 1,
     'is_contact' => 0,
-    'is_required' => 0,
+    // "is_required" must be FALSE when not required, not just falsy.
+    'is_required' => FALSE,
     'title' => E::ts('Default positive participant status'),
     'description' => E::ts('Default positive participant status to set participants to when assigning a resource.'),
     'html_attributes' => [
@@ -57,7 +58,8 @@ return [
     'add' => '4.3',
     'is_domain' => 1,
     'is_contact' => 0,
-    'is_required' => 0,
+    // "is_required" must be FALSE when not required, not just falsy.
+    'is_required' => FALSE,
     'title' => E::ts('Default negative participant status'),
     'description' => E::ts('Default negative participant status to set participants to when un-assigning a resource.'),
     'html_attributes' => [
