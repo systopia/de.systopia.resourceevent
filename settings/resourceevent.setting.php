@@ -32,7 +32,7 @@ return [
     // "is_required" must be FALSE when not required, not just falsy.
     'is_required' => FALSE,
     'title' => E::ts('Default positive participant status'),
-    'description' => E::ts('Default positive participant status to set participants to when assigning a resource.'),
+    'description' => E::ts('Default positive participant status to set participants to when assigning a resource. If left unset, the positive participant status with the highest weight is being used.'),
     'html_attributes' => [
       'class' => 'crm-select2',
     ],
@@ -61,7 +61,7 @@ return [
     // "is_required" must be FALSE when not required, not just falsy.
     'is_required' => FALSE,
     'title' => E::ts('Default negative participant status'),
-    'description' => E::ts('Default negative participant status to set participants to when un-assigning a resource.'),
+    'description' => E::ts('Default negative participant status to set participants to when un-assigning a resource. If left unset, the negative participant status with the highest weight is being used.'),
     'html_attributes' => [
       'class' => 'crm-select2',
     ],
