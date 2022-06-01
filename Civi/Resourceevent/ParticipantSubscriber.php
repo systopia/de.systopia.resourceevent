@@ -116,8 +116,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
       (
         self::participantHasResourceRole($participant)
         && (
-          \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant['status_id'], 'Negative')
-          || \CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant['status_id'], 'Pending')
+          !\CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($participant['status_id'], 'Positive')
         )
       )
       || self::participantAffected($participant['id'])
