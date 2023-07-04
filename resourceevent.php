@@ -53,7 +53,6 @@ function resourceevent_civicrm_install() {
  * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_postInstall
  */
 function resourceevent_civicrm_postInstall() {
-  _resourceevent_civix_civicrm_postInstall();
 
   // Reconcile managed entities again for our custom group to pick up the
   // correct participant role to be attached to. Unfortunately, we can't limit
@@ -79,39 +78,12 @@ function resourceevent_civicrm_postInstall() {
 }
 
 /**
- * Implements hook_civicrm_uninstall().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_uninstall
- */
-function resourceevent_civicrm_uninstall() {
-  _resourceevent_civix_civicrm_uninstall();
-}
-
-/**
  * Implements hook_civicrm_enable().
  *
  * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_enable
  */
 function resourceevent_civicrm_enable() {
   _resourceevent_civix_civicrm_enable();
-}
-
-/**
- * Implements hook_civicrm_disable().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_disable
- */
-function resourceevent_civicrm_disable() {
-  _resourceevent_civix_civicrm_disable();
-}
-
-/**
- * Implements hook_civicrm_upgrade().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_upgrade
- */
-function resourceevent_civicrm_upgrade($op, CRM_Queue_Queue $queue = NULL) {
-  return _resourceevent_civix_civicrm_upgrade($op, $queue);
 }
 
 /**
@@ -201,15 +173,3 @@ function resourceevent_civicrm_managed(&$entities) {
     ],
   ];
 }
-
-/**
- * Implements hook_civicrm_entityTypes().
- *
- * Declare entity types provided by this module.
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_entityTypes
- */
-function resourceevent_civicrm_entityTypes(&$entityTypes) {
-  _resourceevent_civix_civicrm_entityTypes($entityTypes);
-}
-

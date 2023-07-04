@@ -18,7 +18,7 @@
   <version>1.0-dev</version>
   <develStage>dev</develStage>
   <compatibility>
-    <ver>5.0</ver>
+    <ver>5.27</ver>
   </compatibility>
   <comments/>
   <requires>
@@ -30,7 +30,7 @@
   <civix>
     <namespace>CRM/Resourceevent</namespace>
     <angularModule>crmResourceevent</angularModule>
-    <format>22.10.0</format>
+    <format>23.02.1</format>
   </civix>
   <mixins>
     <mixin>menu-xml@1.0.0</mixin>
