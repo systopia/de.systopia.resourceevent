@@ -27,7 +27,7 @@ class ResourceAssignmentSubscriber implements \Symfony\Component\EventDispatcher
   /**
    * @inheritDoc
    */
-  public static function getSubscribedEvents() {
+  public static function getSubscribedEvents(): array {
     return [
       'civi.dao.postInsert' => 'insertUpdateResourceAssignment',
       'civi.dao.postUpdate' => 'insertUpdateResourceAssignment',

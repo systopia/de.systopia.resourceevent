@@ -26,7 +26,7 @@ class ParticipantSubscriber implements \Symfony\Component\EventDispatcher\EventS
   /**
    * @inheritDoc
    */
-  public static function getSubscribedEvents() {
+  public static function getSubscribedEvents(): array {
     return [
       '&hook_civicrm_pre' => 'preParticipant',
       '&hook_civicrm_post' => 'delegatePostCallback',
